@@ -130,3 +130,45 @@ En `Jenkins`, tendrías que configurar un servidor, plugins, agentes, credencial
 
 `GitHub Actions` reduce radicalmente el tiempo entre `push` → `build` → `deploy`.
 
+## 🚀 Nuestro flujo de trabajo CI/CD (Visión general del tutorial)
+
+En esta lección definiremos el `flujo completo que construiremos en el tutorial`, desde la creación del proyecto
+hasta el despliegue automatizado utilizando `GitHub Actions`.
+
+El objetivo es implementar un pipeline CI/CD que:
+
+- Compile y pruebe nuestro proyecto de Spring Boot.
+- Construya una imagen Docker.
+- Publique dicha imagen en Docker Hub.
+
+Todo esto será ejecutado automáticamente cada vez que realicemos cambios en el código.
+
+### 🛠️ ¿Qué construiremos?
+
+1. `Crearemos un proyecto Spring Boot`. Desarrollaremos un microservicio base (REST API simple) usando `Spring Boot`.
+2. `Subiremos el proyecto a GitHub`. El repositorio alojará no solo el código fuente, sino también los workflows YAML
+   que definen el pipeline.
+3. `Configuraremos un workflow de GitHub Actions`. Desde la pestaña `Actions` crearemos un pipeline que se ejecutará en
+   cada `push` o `pull_request`.
+4. `Definiremos las etapas del pipeline`. GitHub Actions se encargará de automatizar:
+    - 🧪 **1. Build & Test**
+        - Descargar dependencias
+        - Ejecutar pruebas unitarias
+        - Generar artefactos del proyecto
+    - 🐳 **2. Build Docker Image**
+        - Construir una imagen Docker basada en nuestra aplicación
+        - Etiquetarla usando el nombre del proyecto y/o el commit ID
+    - 📤 **3. Push Image to Docker Hub**
+        - Autenticarse contra Docker Hub usando GitHub Secrets
+        - Subir la imagen generada al registry
+
+### 🔄 Resultado final: pipeline CI/CD automatizado
+
+Una vez configurado, `GitHub Actions` ejecutará este flujo de trabajo automáticamente cada vez que actualices tu
+repositorio.
+
+![03.png](assets/03.png)
+
+Con esto, obtendremos un pipeline completo que acompaña al código desde el desarrollo hasta la entrega.
+
+
