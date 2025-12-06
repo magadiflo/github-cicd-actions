@@ -171,4 +171,39 @@ repositorio.
 
 Con esto, obtendremos un pipeline completo que acompaña al código desde el desarrollo hasta la entrega.
 
+## 🧱 Creando el proyecto Spring Boot
 
+Para comenzar con nuestro pipeline CI/CD, primero necesitamos un proyecto base sobre el cual trabajará GitHub Actions.
+Crearemos un proyecto de Spring Boot usando
+[Spring Initializr](https://start.spring.io/#!type=maven-project&language=java&platformVersion=3.5.8&packaging=jar&configurationFileFormat=yaml&jvmVersion=21&groupId=dev.magadiflo&artifactId=github-cicd-actions&name=github-cicd-actions&description=Demo%20project%20for%20Spring%20Boot&packageName=dev.magadiflo.app&dependencies=web,lombok),
+con las dependencias mínimas necesarias para construir una API sencilla.
+
+## 📦 Dependencias utilizadas
+
+El proyecto usará una configuración ligera pero suficiente para la demostración del pipeline:
+
+- `spring-boot-starter-web`. Para crear un servicio REST.
+- `lombok`. Simplifica código boilerplate como getters, setters, constructores, etc.
+- `spring-boot-starter-test`. Para ejecutar pruebas unitarias que se usarán en la etapa de CI.
+
+````xml
+<!--Spring Boot 3.5.8-->
+<!--Java 21-->
+<dependencies>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+````
