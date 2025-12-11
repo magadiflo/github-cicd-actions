@@ -277,3 +277,66 @@ $ curl -v http://localhost:8080/api/v1/greetings | jq
 }
 ````
 
+## 📤 2° paso: Enviando el código fuente al repositorio de GitHub
+
+Una vez creado nuestro proyecto Spring Boot, el siguiente paso es subir el código al repositorio remoto donde
+construiremos nuestro pipeline CI/CD. En este caso, utilizaremos GitHub.
+
+### Crear el repositorio en GitHub
+
+Creamos un repositorio llamado `github-cicd-actions`, donde almacenaremos todo el proyecto junto con los workflows de
+GitHub Actions.
+
+![04.png](assets/04.png)
+
+### Verificar el historial de commits local
+
+Desde la consola, nos ubicamos en la raíz del proyecto para revisar el historial de cambios registrados hasta el
+momento:
+
+````bash
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main)
+$ git lg
+* 7999462 (HEAD -> main) Creando un endpoint sencillo
+* 43da16b Creando el proyecto Spring Boot
+* b572268 Nuestro flujo de trabajo CI/CD (Visión general del tutorial)
+* 443597c Inicio
+````
+
+### Asociar el repositorio local con el repositorio remoto
+
+Agregamos la URL del repositorio recién creado como origen (remote):
+
+````bash
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main)
+$ git remote add origin https://github.com/magadiflo/github-cicd-actions.git
+````
+
+Este comando crea un vínculo entre tu proyecto local y el repositorio de GitHub.
+
+### Subir el proyecto al repositorio remoto (push)
+
+Una vez configurado el remote, hacemos push del proyecto completo hacia GitHub:
+
+````bash
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main)
+$ git push -u origin main
+Enumerating objects: 51, done.
+Counting objects: 100% (51/51), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (36/36), done.
+Writing objects: 100% (51/51), 266.13 KiB | 12.67 MiB/s, done.
+Total 51 (delta 9), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (9/9), done.
+To https://github.com/magadiflo/github-cicd-actions.git
+ * [new branch]      main -> main
+branch 'main' set up to track 'origin/main'. 
+````
+
+### Verificación en GitHub
+
+Finalmente, refrescamos el repositorio en GitHub y confirmamos que todos los archivos del proyecto se hayan cargado
+correctamente.
+
+![05.png](assets/05.png)
+
