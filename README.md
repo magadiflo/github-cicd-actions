@@ -340,3 +340,188 @@ correctamente.
 
 ![05.png](assets/05.png)
 
+## ⚙️ 3° paso: Creando el Workflow de GitHub Actions
+
+En este paso configuraremos nuestro primer workflow CI/CD dentro del repositorio de GitHub.
+Este workflow será responsable de:
+
+- Compilar el proyecto
+- Ejecutar las pruebas
+- Publicar el gráfico de dependencias
+
+Este pipeline será la base sobre la cual luego añadiremos las etapas de Docker y despliegue continuo.
+
+### 🧭 Navegando a GitHub Actions
+
+Dentro del repositorio, abrimos la pestaña `Actions`. `GitHub` nos sugiere plantillas predefinidas llamadas `workflows`,
+y entre ellas hay dos especialmente relevantes para proyectos Maven:
+
+- `Java With Maven` — Plantilla estándar de CI
+    - Esta plantilla está centrada en validar la calidad del código:
+        - ✔ Compila el proyecto
+        - ✔ Ejecuta todos los tests
+        - ✔ Verifica que la rama está en buen estado
+    - Es la plantilla base para pipelines que validan pull requests.
+
+- `Publish Java Package With Maven` — Publicación de artefactos
+    - Incluye todo lo anterior, pero además permite:
+        - Publicar un `.jar` o `.war`
+        - Subirlo a un registry como Maven Central, GitHub Packages u otro
+    - Esta plantilla se usa cuando tu proyecto es una librería que otros consumirán.
+
+### 🔒 Habilitar Dependency Graph
+
+Antes de crear nuestro workflow, debemos activar una opción importante:
+
+📍 `Settings` → `Security` → `Advanced Security` → `Dependency Graph`
+
+Si no habilitamos esta opción, GitHub marcará un error durante el pull request porque el workflow actualizará el gráfico
+de dependencias.
+
+![06.png](assets/06.png)
+
+### 📝 Crear workflow con Java With Maven
+
+Seleccionamos la plantilla `Java with Maven` y hacemos clic en `Configure`:
+
+![07.png](assets/07.png)
+
+GitHub generará automáticamente un archivo llamado `maven.yml`. Nosotros lo ajustamos para adaptarlo a:
+
+- Nombre personalizado
+- Uso de Java 21
+- Mejor claridad en los pasos
+- Publicación del dependency graph
+
+Aquí está el archivo final:
+
+````yml
+name: Project CI/CD Flow
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    # Añadido: Permiso para que GITHUB_TOKEN pueda subir el gráfico de dependencias
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Build with Maven
+        run: mvn -B clean install
+
+      # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
+      # Este paso se ejecutará correctamente por la configuración permissions.contents=write y la habilitación del 
+      # Dependency graph en el Advanced Security de el repositorio de GitHub
+      - name: Update dependency graph
+        uses: advanced-security/maven-dependency-submission-action@571e99aab1055c2e71a1e2309b9691de18d6b7d6
+````
+
+- 🏷️ `name: Project CI/CD Flow`. Nombre visible del workflow en GitHub Actions.
+- Sección `on`. Define los eventos que disparan el workflow.
+    - El pipeline se ejecutará en:
+        - Cada *push* hacia `main`
+        - Cada *pull request* que proponga cambios en `main`
+    - Esto es típico para validar código antes de integrarlo a la rama principal.
+- `jobs`: Todos los trabajos del pipeline, en este caso solo tenemos un job: `build`.
+- `runs-on: ubuntu-latest`. GitHub ejecutará este pipeline en un runner de Ubuntu alojado en GitHub.
+- `permissions.contents=write`. Es necesario para que GitHub pueda actualizar el gráfico de dependencias. Sin esto el
+  workflow fallará.
+- `steps`. Cada paso del job ejecuta una acción específica dentro del runner.
+    - `uses: actions/checkout@v4`. Clona el código fuente del mismo repositorio donde se está ejecutando el workflow.
+      Esto permite que los siguientes pasos (compilación, pruebas, análisis, construcción de Docker, etc.) puedan
+      trabajar con el código del proyecto.
+        - Por ejemplo, si el workflow está corriendo en `magadiflo/github-cicd-actions`, entonces `actions/checkout@v4`
+          va a clonar ese repositorio `magadiflo/github-cicd-actions` dentro del runner de GitHub Actions.
+- Configurar JDK 21.
+    - Usa la distribución Temurin (LTS recomendada)
+    - Activa la caché de Maven → acelera futuros builds
+- Compilar y ejecutar pruebas
+    - `-B` → modo batch (sin salida interactiva, ideal para CI)
+- Actualizar dependency graph
+    - Este paso envía la lista de dependencias a GitHub.
+    - Sirve para:
+        - Alertas de seguridad
+        - Dependabot
+        - Auditorías
+
+Presionamos en `Commit changes...`
+
+![08.png](assets/08.png)
+
+Seleccionamos `Crate a new branch for this commit and start a pull request` para crear este archivo en otra rama.
+
+![09.png](assets/09.png)
+
+### 🔄 Crear el Pull Request
+
+Una vez terminado el YAML, hacemos clic en:
+
+- ✔ Commit changes
+- ✔ Create a new branch and start a pull request
+
+![10.png](assets/10.png)
+
+Luego fusionamos los cambios en la rama `main`:
+
+![11.png](assets/11.png)
+
+Finalmente, vemos el archivo `maven.yml` dentro de: `.github/workflows/maven.yml`.
+
+![12.png](assets/12.png)
+
+### 🔻 Actualizar el repositorio local
+
+Traemos la última versión desde GitHub:
+
+````bash
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main -> origin)
+$ git pull origin main
+remote: Enumerating objects: 7, done.
+remote: Counting objects: 100% (7/7), done.
+remote: Compressing objects: 100% (4/4), done.
+remote: Total 6 (delta 1), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (6/6), 2.67 KiB | 182.00 KiB/s, done.
+From https://github.com/magadiflo/github-cicd-actions
+ * branch            main       -> FETCH_HEAD
+   47eadce..0cc30b6  main       -> origin/main
+Updating 47eadce..0cc30b6
+Fast-forward
+ .github/workflows/maven.yml | 39 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 39 insertions(+)
+ create mode 100644 .github/workflows/maven.yml
+````
+
+### 🧭 Verificar historial de commits
+
+````bash
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main -> origin)
+$ git lg
+*   0cc30b6 (HEAD -> main, origin/main, origin/HEAD) Merge pull request #3 from magadiflo/magadiflo-patch-1
+|\
+| * 3b73a2c (origin/magadiflo-patch-1) Modify CI/CD workflow for JDK 21 and permissions
+|/
+* 47eadce 2° paso: Enviando el código fuente al repositorio de GitHub
+* 7999462 Creando un endpoint sencillo
+* 43da16b Creando el proyecto Spring Boot
+* b572268 Nuestro flujo de trabajo CI/CD (Visión general del tutorial)
+* 443597c Inicio 
+````
+
+Revisamos nuestros archivos en nuestro proyecto y vemos: `.github` > `workflows` > `maven.yml`, vemos que se ha
+descargado correctamente.
+
