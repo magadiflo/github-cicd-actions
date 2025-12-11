@@ -171,7 +171,7 @@ repositorio.
 
 Con esto, obtendremos un pipeline completo que acompaña al código desde el desarrollo hasta la entrega.
 
-## 🧱 Creando el proyecto Spring Boot
+## 🧱 1° paso: Creando el proyecto Spring Boot
 
 Para comenzar con nuestro pipeline CI/CD, primero necesitamos un proyecto base sobre el cual trabajará GitHub Actions.
 Crearemos un proyecto de Spring Boot usando
@@ -207,3 +207,73 @@ El proyecto usará una configuración ligera pero suficiente para la demostraci�
     </dependency>
 </dependencies>
 ````
+
+## 🌐 Creando un endpoint sencillo
+
+En esta lección construiremos una pequeña API REST con Spring Boot. Este endpoint será la base sobre la cual
+ejecutaremos nuestro pipeline CI/CD con GitHub Actions (compilación, pruebas, construcción de imagen Docker,
+despliegue, etc.).
+
+La idea es mantener el servicio simple, pero funcional, como suele hacerse en pipelines de demostración o pruebas de
+integración.
+
+### ⚙️ Configuración de la aplicación
+
+Agregamos una configuración mínima en el archivo `application.yml` para definir:
+
+- Puerto de ejecución (8080)
+- Manejo de mensajes de error
+- Nombre lógico de la aplicación (útil para logs, observabilidad, etc.)
+
+````yml
+server:
+  port: 8080
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: github-cicd-actions
+````
+
+### 🧪 Creando un endpoint REST básico
+
+Ahora definimos un controlador sencillo que responderá con un saludo y algunos metadatos útiles:
+
+- Mensaje de bienvenida
+- Timestamp
+- Versión del servicio
+
+````java
+
+@RestController
+@RequestMapping(path = "/api/v1/greetings")
+public class HelloController {
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> hello() {
+        var response = new HashMap<String, Object>();
+        response.put("message", "Hola desde Spring Boot + GitHub Actions!");
+        response.put("timestamp", LocalDateTime.now());
+        response.put("version", "1.0.0");
+        return ResponseEntity.ok(response);
+    }
+}
+````
+
+### 📌 Resultado esperado
+
+````bash
+$ curl -v http://localhost:8080/api/v1/greetings | jq
+>
+< HTTP/1.1 200
+< Content-Type: application/json
+< Transfer-Encoding: chunked
+< Date: Thu, 11 Dec 2025 15:38:06 GMT
+<
+{
+  "message": "Hola desde Spring Boot + GitHub Actions!",
+  "version": "1.0.0",
+  "timestamp": "2025-12-11T10:38:06.8277636"
+}
+````
+
