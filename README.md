@@ -1172,9 +1172,21 @@ Todo ocurrió como esperábamos:
 
 ![21.png](assets/21.png)
 
-## Modificando código fuente para ver funcionamiento del workflow
+## Validando el Workflow CI/CD mediante un cambio real en el código fuente
 
-Vamos a realizar una prueba, así que modificamos el endpoint de nuestro controlador con el siguiente código:
+Para comprobar que nuestro `workflow CI/CD funciona de extremo a extremo`, realizamos una modificación real en el
+código fuente de la aplicación. De esta forma validamos que:
+
+- GitHub Actions detecta el cambio.
+- Ejecuta nuevamente el pipeline completo.
+- Genera una nueva imagen Docker versionada.
+- Publica correctamente la imagen en Docker Hub.
+- Podemos consumir esa imagen desde cualquier entorno.
+
+### Modificando el endpoint del controlador
+
+Actualizamos el endpoint agregando un nuevo campo (`status`) a la respuesta, lo que nos permitirá identificar
+claramente el cambio al ejecutar la aplicación desde la nueva imagen Docker.
 
 ````java
 
@@ -1185,7 +1197,7 @@ public class HelloController {
     public ResponseEntity<Map<String, Object>> hello() {
         var response = new HashMap<String, Object>();
         response.put("message", "Hola desde Spring Boot + GitHub Actions!");
-        response.put("status", "Ejecución exitosa");    //<---- Esto fue agregado
+        response.put("status", "Ejecución exitosa");    // Nuevo campo
         response.put("timestamp", LocalDateTime.now());
         response.put("version", "1.0.0");
         return ResponseEntity.ok(response);
@@ -1193,14 +1205,134 @@ public class HelloController {
 }
 ````
 
-Procedemos a guardar en el repositorio local.
+### Confirmando el disparo automático del workflow
+
+Luego de guardar los cambios y ejecutar `git push`, `GitHub Actions` inicia automáticamente una nueva ejecución del
+workflow, tal como lo definimos en el archivo `maven.yml`.
 
 ````bash
-$ 
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main -> origin)
+$ git add .
+$ git commit -m "Modificando código fuente para ver funcionamiento del workflow"
+$ git push
 ````
 
-Subimos los cambios al repositorio remoto.
+![22.png](assets/22.png)
+
+Esto confirma uno de los principios clave de CI/CD:
+
+> Cada cambio en la rama principal dispara automáticamente el pipeline.
+
+Al finalizar la ejecución, todos los pasos se completan correctamente:
+
+- Build con Maven
+- Ejecución de pruebas
+- Construcción de imagen Docker
+- Login en Docker Hub
+- Push de la imagen versionada y latest
+
+![23.png](assets/23.png)
+
+### Verificando los tags generados en Docker Hub
+
+Al ingresar a `Docker Hub`, observamos que:
+
+- Se ha generado un nuevo tag basado en el commit (`bf18536f`).
+- El tag `latest` apunta ahora a esta nueva versión.
+- Los tags anteriores permanecen disponibles.
+
+Esto nos da `trazabilidad completa` entre:
+
+- Código fuente (commit SHA)
+- Imagen Docker
+- Versión desplegada
+
+![24.png](assets/24.png)
+
+### Ejecutando la imagen generada desde Docker Hub
+
+Desde nuestra máquina local descargamos la imagen recién creada:
 
 ````bash
-$ 
+$ docker pull magadiflo/github-cicd-actions:bf18536f
 ````
+
+Verificamos que la imagen ya está disponible localmente:
+
+````bash
+$ docker image ls                                                                                                                                                                
+IMAGE                                    ID             DISK USAGE   CONTENT SIZE   EXTRA
+apache/kafka:4.1.0                       a183a690a3a6        437MB             0B        
+grafana/grafana:12.1.1                   0a7de979b313        723MB             0B        
+grafana/loki:3.5.5                       fd1a879e62ca        123MB             0B        
+grafana/promtail:3.5.5                   83598d9322f4        198MB             0B        
+grafana/tempo:2.8.2                      08c4147d7e1e        118MB             0B        
+jenkins/jenkins:2.535-jdk21              84444d75a07c        491MB             0B        
+magadiflo/github-cicd-actions:bf18536f   22f416926257        227MB             0B        
+maven:3-alpine                           5435658a63ac        116MB             0B        
+mysql:8.0.41-debian                      4340b8ad7a7c        610MB             0B        
+postgres:17-alpine                       f40315d0e8a6        279MB             0B        
+prom/prometheus:v3.5.0                   a3bc50fcb50f        313MB             0B        
+redis:8.0.3-alpine                       c25e2f66b829       60.5MB             0B        
+sonarqube:25.10.0.114319-community       047bd8988268       1.23GB             0B        
+testcontainers/ryuk:0.12.0               a926383422af       15.8MB             0B         
+````
+
+Luego creamos un contenedor a partir de esa imagen:
+
+````bash
+$ docker container run -d -p 8080:8080 --rm --name c-demo-app magadiflo/github-cicd-actions:bf18536f
+0b643463bcfef00f596c5b2e22ace109e743ae5204944860c0705254a424b125
+````
+
+Confirmamos que el contenedor está en ejecución:
+
+````bash
+$ docker container ls -a
+CONTAINER ID   IMAGE                                    COMMAND                  CREATED          STATUS          PORTS                                         NAMES
+0b643463bcfe   magadiflo/github-cicd-actions:bf18536f   "java org.springfram…"   23 seconds ago   Up 13 seconds   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp   c-demo-app 
+````
+
+### Validando el cambio en tiempo de ejecución
+
+Finalmente, realizamos una petición al endpoint modificado:
+
+````bash
+$ curl -v http://localhost:8080/api/v1/greetings | jq
+>
+< HTTP/1.1 200
+< Content-Type: application/json
+< Transfer-Encoding: chunked
+< Date: Fri, 12 Dec 2025 22:11:48 GMT
+<
+{
+  "message": "Hola desde Spring Boot + GitHub Actions!",
+  "version": "1.0.0",
+  "status": "Ejecución exitosa",
+  "timestamp": "2025-12-12T22:11:48.132116375"
+}
+````
+
+Esto confirma que:
+
+- La imagen Docker contiene el código actualizado.
+- El workflow ejecutó correctamente todo el flujo.
+- La aplicación funciona exactamente como se esperaba.
+
+## Conclusión final del tutorial
+
+Con esta prueba final podemos afirmar que nuestro pipeline CI/CD con GitHub Actions está funcionando correctamente.
+
+De forma automática, `GitHub Actions` realiza:
+
+1. Checkout del código fuente.
+2. Compilación del proyecto con Maven.
+3. Ejecución de pruebas unitarias.
+4. Generación del .jar.
+5. Construcción de la imagen Docker.
+6. Autenticación segura contra Docker Hub.
+7. Publicación de la imagen versionada y latest.
+8. Disponibilidad inmediata de la imagen para despliegue.
+
+🎯 Resultado:
+> Tenemos un flujo CI/CD profesional, reproducible y alineado con prácticas reales usadas en entornos productivos.
