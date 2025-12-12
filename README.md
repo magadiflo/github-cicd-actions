@@ -380,7 +380,7 @@ de dependencias.
 
 ![06.png](assets/06.png)
 
-### 📝 Crear workflow con Java With Maven
+## 📝 3.1 Build & Test: Creando el Workflow de CI con Java With Maven
 
 Seleccionamos la plantilla `Java with Maven` y hacemos clic en `Configure`:
 
@@ -525,3 +525,281 @@ $ git lg
 Revisamos nuestros archivos en nuestro proyecto y vemos: `.github` > `workflows` > `maven.yml`, vemos que se ha
 descargado correctamente.
 
+## Verificando ejecución del WorkFlow
+
+Antes de continuar con las etapas siguientes de CI/CD, validamos que el workflow que creamos —responsable del paso
+Build & Test— se esté ejecutando correctamente en GitHub Actions.
+
+### 🧾 Historial de commits
+
+Después de completar la configuración del workflow en la lección anterior, realizamos un commit y lo subimos al
+repositorio remoto. Nuestro historial actual queda así:
+
+````bash
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main -> origin)
+$ git lg
+* 014f953 (HEAD -> main, origin/main, origin/HEAD) 3° paso: Creando el Workflow de GitHub Actions
+*   0cc30b6 Merge pull request #3 from magadiflo/magadiflo-patch-1
+|\
+| * 3b73a2c (origin/magadiflo-patch-1) Modify CI/CD workflow for JDK 21 and permissions
+|/
+* 47eadce 2° paso: Enviando el código fuente al repositorio de GitHub
+* 7999462 Creando un endpoint sencillo
+* 43da16b Creando el proyecto Spring Boot
+* b572268 Nuestro flujo de trabajo CI/CD (Visión general del tutorial)
+* 443597c Inicio 
+````
+
+### ⚙️ ¿Por qué el workflow se ejecutó automáticamente?
+
+Esto ocurre gracias al bloque `on:` configurado en el archivo `maven.yml`:
+
+````yml
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+````
+
+🔍 Explicación
+
+- Cada vez que hacemos un `push` a la rama `main`.
+- O abrimos un `pull request` hacia la rama `main`.
+
+➡️ `GitHub Actions` dispara automáticamente el `workflow`.
+
+Por eso, una vez que enviamos los últimos cambios, GitHub ejecutó el pipeline sin que tuviéramos que hacer nada más.
+
+### 🚀 Verificando la ejecución en GitHub Actions
+
+Entramos a nuestro repositorio remoto y abrimos la pestaña `Actions`. Allí aparece la lista de ejecuciones recientes del
+pipeline.
+
+- Un ícono verde (✔) indica que todo se ejecutó con éxito.
+- Un ícono rojo (✖) indicaría errores durante la ejecución.
+
+![13.png](assets/13.png)
+
+### 📂 Detalles de la ejecución
+
+Hacemos clic en la última ejecución y luego seleccionamos el job `build`:
+
+![14.png](assets/14.png)
+
+Dentro de esa sección podemos ver cada uno de los pasos definidos en `maven.yml` ejecutándose en orden:
+
+![15.png](assets/15.png)
+
+### ✅ Descripción general de cada paso del workflow
+
+#### 1. Set up job 🏁
+
+Este paso lo ejecuta GitHub automáticamente. Aquí se prepara el entorno donde correrá el workflow:
+
+- Descarga la versión del runner (ubuntu-latest).
+- Verifica la versión del runner.
+- Prepara el directorio de trabajo.
+- Descarga las acciones que usará tu workflow (checkout, setup-java, etc.).
+- Configura el token de autenticación (GITHUB_TOKEN).
+
+`En resumen`: se prepara la máquina virtual donde correrán los demás pasos.
+
+````bash
+Current runner version: '2.329.0'
+Runner Image Provisioner
+Operating System
+Runner Image
+GITHUB_TOKEN Permissions
+Secret source: Actions
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+Download action repository 'actions/setup-java@v4' (SHA:c1e323688fd81a25caa38c78aa6df2d33d3e20d9)
+Download action repository 'advanced-security/maven-dependency-submission-action@571e99aab1055c2e71a1e2309b9691de18d6b7d6' (SHA:571e99aab1055c2e71a1e2309b9691de18d6b7d6)
+Complete job name: build
+````
+
+#### 2. Run actions/checkout@v4 📥 (Descargar el código del repo)
+
+Este paso `clona tu repositorio actual` dentro del runner. Hace cosas como:
+
+- Obtener la última referencia (`HEAD`).
+- Preparar la carpeta del proyecto.
+- Descargar el código completo de la rama (`main` en tu caso).
+- Este paso es esencial porque `sin el código descargado, no habría nada que compilar ni testear`.
+
+````bash
+Run actions/checkout@v4
+Syncing repository: magadiflo/github-cicd-actions
+Getting Git version info
+Temporarily overriding HOME='/home/runner/work/_temp/88b68f98-ae86-4113-bf61-e677be8dab4b' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+/usr/bin/git config --global --add safe.directory /home/runner/work/github-cicd-actions/github-cicd-actions
+Deleting the contents of '/home/runner/work/github-cicd-actions/github-cicd-actions'
+Initializing the repository
+Disabling automatic garbage collection
+Setting up auth
+Fetching the repository
+Determining the checkout info
+/usr/bin/git sparse-checkout disable
+/usr/bin/git config --local --unset-all extensions.worktreeConfig
+Checking out the ref
+/usr/bin/git log -1 --format=%H
+014f9539091c9117426d8ffdcf16647d00fe88d6 
+````
+
+#### 3. Set up JDK 21 ☕ (Instalar Java)
+
+Aquí la acción `setup-java` instala y configura `Java 21` en el runner. Incluye:
+
+- Descarga del JDK (o restauración desde el cache si ya existe).
+- Configuración de la carpeta `.m2` de Maven.
+- Creación del archivo `settings.xml` para Maven.
+
+En pocas palabras: `prepara Java para que Maven pueda construir el proyecto`.
+
+````bash
+Run actions/setup-java@v4
+Installed distributions
+Creating settings.xml with server-id: github
+Writing to /home/runner/.m2/settings.xml
+Cache hit for: setup-java-Linux-x64-maven-dcef6bc970ae2d9517b2000fdbc8d8786a5ef87f013d8686b3d16452a932d5a7
+Received 0 of 83746138 (0.0%), 0.0 MBs/sec
+Received 79691776 of 83746138 (95.2%), 38.0 MBs/sec
+Received 83746138 of 83746138 (100.0%), 38.4 MBs/sec
+Cache Size: ~80 MB (83746138 B)
+/usr/bin/tar -xf /home/runner/work/_temp/daabdb21-f18c-4e45-a251-28fd3fa59689/cache.tzst -P -C /home/runner/work/github-cicd-actions/github-cicd-actions --use-compress-program unzstd
+Cache restored successfully
+Cache restored from key: setup-java-Linux-x64-maven-dcef6bc970ae2d9517b2000fdbc8d8786a5ef87f013d8686b3d16452a932d5a7 
+````
+
+#### 4. Build with Maven 🔨 (Compilar y ejecutar tests)
+
+Ejecuta el comando: `mvn -B clean install`.
+
+Este paso realiza:
+
+- Limpieza del proyecto (clean).
+- Compilación.
+- Ejecución de tests automatizados.
+- Empaquetado del artefacto (`.jar`).
+
+GitHub muestra:
+
+- Resumen de tests
+- Build success/failure
+
+Este paso es el corazón del proceso de `CI (Integración Continua)`.
+
+````bash
+Run mvn -B clean install
+[INFO] Scanning for projects...
+...
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running dev.magadiflo.app.GithubCicdActionsApplicationTests
+18:28:28.496 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [dev.magadiflo.app.GithubCicdActionsApplicationTests]: GithubCicdActionsApplicationTests does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+18:28:28.598 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration dev.magadiflo.app.GithubCicdActionsApplication for test class dev.magadiflo.app.GithubCicdActionsApplicationTests
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.5.8)
+
+...
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.621 s -- in dev.magadiflo.app.GithubCicdActionsApplicationTests
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+...
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  7.311 s
+[INFO] Finished at: 2025-12-11T18:28:31Z
+[INFO] ------------------------------------------------------------------------
+````
+
+#### 5. Update dependency graph 📊 (Enviar snapshot de dependencias a GitHub)
+
+Esta acción genera un “snapshot” del árbol de dependencias de Maven y lo envía a GitHub.
+
+¿Para qué sirve?
+
+- Para mejorar las alertas de seguridad (Dependabot).
+- Para que GitHub pueda detectar vulnerabilidades en tus dependencias.
+- Para reconstruir el “Dependency Graph” del proyecto.
+
+Este paso `no afecta el build`, solo actualiza la metadata del proyecto.
+
+````bash
+Run advanced-security/maven-dependency-submission-action@571e99aab1055c2e71a1e2309b9691de18d6b7d6
+depgraph-maven-plugin
+Dependency Snapshot
+Submitting Snapshot... 
+...
+Notice: Snapshot successfully created at 2025-12-11T18:28:34.183Z
+completed.
+````
+
+#### 6. Post Set up JDK 21 🧹 (Limpieza post-ejecución)
+
+GitHub Actions ejecuta tareas de limpieza interna, como:
+
+- Validar si debe guardar el cache del JDK (en este caso no fue necesario).
+- Restaurar configuraciones previas.
+
+Nada que tú debas configurar —es automático.
+
+````bash
+Post job cleanup.
+Cache hit occurred on the primary key setup-java-Linux-x64-maven-dcef6bc970ae2d9517b2000fdbc8d8786a5ef87f013d8686b3d16452a932d5a7, not saving cache.
+````
+
+#### 7. Post Run actions/checkout@v4 🧽 (Limpieza del checkout)
+
+GitHub limpia configuraciones globales que se aplicaron al clonar el repositorio. Incluye:
+
+- Restaurar configuraciones de git.
+- Eliminar headers temporales de autenticación.
+- Depurar entradas agregadas al git config local.
+
+De nuevo: **es mantenimiento interno del runner.**
+
+````bash
+Post job cleanup.
+/usr/bin/git version
+git version 2.52.0
+Temporarily overriding HOME='/home/runner/work/_temp/8d53848e-9e8c-4670-b5b1-de0f18655d9a' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+/usr/bin/git config --global --add safe.directory /home/runner/work/github-cicd-actions/github-cicd-actions
+/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+http.https://github.com/.extraheader
+/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url 
+````
+
+#### 8. Complete job ✅ (Fin del workflow)
+
+Último paso del workflow, donde GitHub:
+
+- Cierra procesos en ejecución.
+- Libera recursos.
+- Marca el job como finalizado.
+
+````bash
+Cleaning up orphan processes 
+````
