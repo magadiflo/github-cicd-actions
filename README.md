@@ -804,45 +804,72 @@ http.https://github.com/.extraheader
 Cleaning up orphan processes 
 ````
 
-## Generando Access Token de DockerHub y configurando secretos en GitHub
+## ✅ Generando Access Token de DockerHub y configurando secretos en GitHub
 
-Hasta este punto, nuestro `maven.yml` tiene como último paso la construcción y el testeo del jar, es decir,
-finaliza con la construcción de `.jar` correctamente testeada.
+Hasta este punto, nuestro archivo `maven.yml` finaliza con la etapa de `Build & Test`, es decir, la construcción del
+`.jar` junto con la ejecución de todas las pruebas.
 
-A partir de ahora, en los siguientes pasos, empezaremos a trabajar con DockerHub, por lo que, para evitar usar nuestra
-contraseña de DockerHub, vamos a crear un `Personal Access Token` desde nuestra propia cuenta:
-`Docker Hub → Account Settings → Personal Access Token → Generate New Token`.
+A partir de aquí iniciaremos la fase de `Build & Push Docker Image`, por lo que necesitamos interactuar con
+`Docker Hub` de forma segura. Esto significa:
+
+- ❌ No usar contraseñas directamente.
+- ✔️ Usar Personal Access Tokens (PAT).
+- ✔️ Guardarlos como secretos en GitHub Actions.
+
+### 🔐 1. Generando un Personal Access Token en Docker Hub
+
+Para obtener un token seguro, ingresamos a:
+
+> `Docker Hub → Account Settings → Personal Access Tokens → Generate New Token`
+
+Ahí creamos un nuevo token:
 
 ![16.png](assets/16.png)
 
-Ahora en `GitHub` nos vamos hacia nuestro repositorio
-`github-cicd-actions → Settings → Secrets and variables → Actions → New repository secret`.
+💡 Nota profesional:
+> Los tokens permiten revocar accesos rápidamente, rotarlos y nunca exponer tu contraseña real. Son la forma correcta de
+> automatizar CI/CD con Docker Hub.
+
+### 🔐 2. Configurando los secretos en GitHub
+
+Ahora debemos agregar el usuario y el token como secretos en nuestro repositorio de GitHub.
+
+Ingresamos a nuestro repositorio:  
+`github-cicd-actions → Settings → Secrets and variables → Actions → New repository secret`
 
 ![17.png](assets/17.png)
 
-Procedemos a crear nuestros dos secretos:
+Creamos los siguientes secretos:
 
-- `DOCKERHUB_USERNAME`: nuestro usuario de DockerHub.
-- `DOCKERHUB_TOKEN`: El Personal Access Token generado anteriormente.
+- `DOCKERHUB_USERNAME` → tu usuario de Docker Hub.
+- `DOCKERHUB_TOKEN` → el Personal Access Token generado antes.
 
 ![18.png](assets/18.png)
 
-## Creando Dockerfile
+💡 Buenas prácticas en empresas:
+> En CI/CD —ya sea GitHub Actions, Jenkins, GitLab CI— todo acceso a terceros debe administrarse vía secrets.  
+> Nunca hardcodees credenciales en archivos YAML o Dockerfile.
 
-En la raíz de nuestro proyecto de Spring Boot creamos el siguiente `Dockerfile`. Como se observa, este Dockerfile
-contiene dos etapas. Aquí estamos asumiendo que el `.jar` ya fue construido y eso en realidad es así, dado que GitHub
-Actions es quien construye el `.jar` precisamente cuando ejecutamos el comando `mvn -B clean install` en el paso
-llamado `Build with Maven` que definimos en el archivo `maven.yml`.
+## 🐳 Creando el Dockerfile
+
+En la raíz del proyecto `Spring Boot` creamos un archivo `Dockerfile` multietapa.
+Este diseño ofrece:
+
+- Imágenes finales más ligeras.
+- Mayor seguridad, porque las herramientas de construcción no quedan dentro de la imagen final.
+- Compatibilidad total con `Spring Boot 3.x` y `jarmode=layertools`.
+
+### 📦 Dockerfile (Explicado)
 
 ````dockerfile
-# ETAPA 1: Copiamos el JAR ya compilado y extraemos las capas
+# ETAPA 1: Extraer capas del JAR (builder)
 FROM eclipse-temurin:21-jre-alpine AS builder
 WORKDIR /app
-# Aquí necesitamos copiar el JAR que se generó en la máquina de GitHub Actions
+# Copiamos el JAR que fue construido previamente por GitHub Actions
 COPY target/*.jar ./app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
-# ETAPA 2: Ejecución (Imagen final ligera solo con JRE)
+# ETAPA 2: Imagen final ligera
 FROM eclipse-temurin:21-jre-alpine AS runner
 WORKDIR /app
 COPY --from=builder /app/dependencies ./
@@ -854,13 +881,44 @@ EXPOSE 8080
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
 ````
 
-## 3.2 Build Docker Image: Construyendo la Imagen Docker desde GitHub Actions
+⚙️ Explicación técnica
 
-En nuestro archivo `maven.yml` agregaremos el siguiente `step` al que le llamaremos `Build Docker image`. En este paso
-primero obtenemos el tag del último commit, específicamente los primeros 8 caracteres empezando desde el caracter 1.
-Luego, ejecutamos el comando para construir la imagen utilizando el valor definido en el secret `DOCKERHUB_USERNAME`.
-Luego de construir la imagen, crearemos otra imagen con el tag `latest` para tener tanto la versión con el commit actual
-como una versión `latest`.
+#### 🔸 Etapa builder
+
+- Parte desde una imagen ligera de JRE 21.
+- Recibe el `.jar` ya compilado por `GitHub Actions` (`target/*.jar`).
+- Extrae las capas usando: `java -Djarmode=layertools -jar app.jar extract`
+    - Esto genera:
+        - `/dependencies`
+        - `/spring-boot-loader`
+        - `/snapshot-dependencies`
+        - `/application`
+    - Estas capas permiten reconstrucciones más rápidas en Docker.
+
+#### 🔸 Etapa runner
+
+Es la imagen final que será enviada a `Docker Hub`:
+
+- Muy ligera (solo JRE + tu aplicación)
+- Ideal para producción y despliegues Kubernetes/Docker Swarm
+- Usa `JarLauncher` porque las capas no están dentro de un único `.jar`
+
+## ✅ 3.2 Build Docker Image: Construyendo la Imagen Docker desde GitHub Actions
+
+Ahora que ya tenemos configurados nuestros secretos (`DOCKERHUB_USERNAME` y `DOCKERHUB_TOKEN`) y contamos con un
+`Dockerfile` en la raíz del proyecto, podemos agregar la etapa para construir nuestra imagen Docker directamente desde
+GitHub Actions.
+
+Dentro del archivo `maven.yml` incorporaremos un nuevo step llamado `Build Docker image`.
+Este paso realiza lo siguiente:
+
+1. `Genera un tag dinámico` en base al hash del commit actual (primeros 8 caracteres de `github.sha`).
+2. `Construye la imagen Docker` utilizando el `Dockerfile` del proyecto.
+3. Asigna dos etiquetas a la imagen:
+    - una etiqueta basada en el commit actual (por ejemplo: `b9c747a1`).
+    - una etiqueta `latest` para indicar la versión más reciente disponible.
+
+### 📦 Fragmento YAML: Build Docker Image
 
 ````yml
 jobs:
@@ -882,18 +940,45 @@ jobs:
           docker tag ${{ secrets.DOCKERHUB_USERNAME }}/github-cicd-actions:${IMAGE_TAG} ${{ secrets.DOCKERHUB_USERNAME }}/github-cicd-actions:latest
 ````
 
+🧩 Explicación técnica paso a paso
+
+1. `IMAGE_TAG=$(echo ${{ github.sha }} | cut -c1-8)`. GitHub proporciona automáticamente el hash del commit actual
+   mediante `github.sha`. Tomamos solo los primeros 8 caracteres para crear una etiqueta corta, única y descriptiva.
+2. `docker build`. Este comando usa tu `Dockerfile` para construir la imagen dentro del runner de `GitHub Actions`.
+   GitHub Actions `sí tiene Docker instalado`, por lo que puede construir imágenes sin configuración adicional.
+3. `docker tag`. Crea una referencia adicional para la misma imagen, pero con el tag `latest`. Esto permite:
+    - usar la imagen exacta por commit: `magadiflo/github-cicd-actions:b9c747a1`.
+    - usar siempre la última versión disponible: `magadiflo/github-cicd-actions:latest`.
+
 ## 3.3 Push Image to Docker Hub: Publicando la Imagen en el Registro de Contenedores
 
-En esta lección definimos dos pasos más, el primero para loguearnos a `DockerHub` y el segundo para subir la imagen
-construida.
+En esta lección añadimos dos pasos finales al workflow de GitHub Actions para completar el flujo CI/CD
+básico con Docker:
 
-Para loguearnos a `DockerHub` usamos `docker/login-action@v3` y definimos en username y password los secretos
-configurados en nuestro repositorio de GitHub para este repositorio `github-cicd-actions`.
+1. `Autenticarnos en Docker Hub` usando `docker/login-action@v3`.
+2. Publicar las imágenes Docker construidas previamente.
 
-Para subir la imagen a `DockerHub` simplemente usamos el comando `docker push` y el nombre de la imagen a subir, en
-nuestro caso subimos las dos imágenes construidas, la imagen con el último commit y el latest.
+Estos pasos permiten que la imagen generada en cada pipeline quede disponible públicamente o de forma privada en
+`Docker Hub`, lista para ser desplegada en cualquier entorno.
 
-> Importante: No es necesario crear previamente el repositorio para nuestra imagen en DockerHub, ya que el mismo
+1. 🔐 `Autenticación en Docker Hub`.
+    - Para iniciar sesión utilizamos: `uses: docker/login-action@v3`.
+    - En sus parámetros username y password utilizamos secretos del repositorio:
+        - `DOCKERHUB_USERNAME`
+        - `DOCKERHUB_TOKEN` (token de acceso generado desde Docker Hub)
+    - El token es preferible a la contraseña porque es más seguro, revocable y específico para CI/CD.
+
+2. 📤 `Push de la imagen hacia Docker Hub`
+    - Una vez autenticados, enviamos la imagen creada a Docker Hub usando el comando estándar:
+      `docker push <usuario>/<repositorio>:<tag>`
+    - En el workflow:
+        - Subimos la imagen etiquetada con los primeros 8 caracteres del SHA del commit.
+        - Subimos la imagen etiquetada como `latest`.
+    - Esto permite:
+        - Versionado seguro (SHA → inmutable).
+        - Última versión conocida (latest → actualizable).
+
+> 💡 `Importante`: No es necesario crear previamente el repositorio para nuestra imagen en DockerHub, ya que el mismo
 > DockerHub
 > lo hará por nosotros. Docker Hub crea automáticamente el repositorio la primera vez que hagamos:
 > `docker push usuario/nombre_imagen:tag`.
@@ -901,6 +986,8 @@ nuestro caso subimos las dos imágenes construidas, la imagen con el último com
 > Eso significa:
 > - Si tu workflow empuja la imagen por primera vez, Docker Hub crea el repo automáticamente.
 > - No necesitas configurarlo manualmente.
+
+### 🧩 Código completo del paso
 
 ````yml
 jobs:
@@ -929,10 +1016,22 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/github-cicd-actions:latest
 ````
 
-## Versión final del maven.yml
+## Versión final del `maven.yml`
 
-A continuación se muestra el archivo final del `maven.yml` que contiene todos los pasos a ejecutar para la construcción
-del `.jar`, construcción de la imagen docker, login a docker hub y subida de la imagen a docker hub.
+A continuación se muestra el archivo completo y final del workflow `maven.yml`, que ejecuta de forma automatizada
+el flujo CI/CD para el proyecto Java. Este pipeline realiza:
+
+1. Construcción del JAR usando Maven.
+2. Construcción de la imagen Docker.
+3. Autenticación en Docker Hub.
+4. Publicación de la imagen en Docker Hub con dos etiquetas:
+    - SHA del commit (inmutable)
+    - latest (mutable)
+
+La configuración también incluye la actualización del archivo Dependency Graph de GitHub, lo cual mejora la calidad de
+las alertas de Dependabot.
+
+### 📄 Archivo `maven.yml`
 
 ````yml
 name: Project CI/CD Flow
@@ -1001,4 +1100,107 @@ jobs:
 
           # Subimos la imagen con etiqueta latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/github-cicd-actions:latest
+````
+
+## 🚀 Ejecutando el Workflow Completo
+
+Para ejecutar el workflow completo, simplemente realizamos cambios en el proyecto, los confirmamos con un commit y
+luego hacemos un push hacia el repositorio remoto en `GitHub`.
+
+Al realizar ese `push`, `GitHub Actions` detecta automáticamente la actualización y ejecuta el workflow configurado en
+`maven.yml`.
+
+En el historial de commits, observamos que el último commit fue: `Build Docker Image - Push Image to Docker Hub`, y
+luego lo enviamos a GitHub con:
+
+````bash
+$ git push 
+````
+
+````bash
+D:\programming\spring\02.youtube\25.java_techie\github-cicd-actions (main -> origin)
+$ git lg
+* b9c747a (HEAD -> main, origin/main, origin/HEAD) Build Docker Image - Push Image to Docker Hub
+* 8aa828b Verificando ejecución del WorkFlow
+* 014f953 3° paso: Creando el Workflow de GitHub Actions
+*   0cc30b6 Merge pull request #3 from magadiflo/magadiflo-patch-1
+|\
+| * 3b73a2c (origin/magadiflo-patch-1) Modify CI/CD workflow for JDK 21 and permissions
+|/
+* 47eadce 2° paso: Enviando el código fuente al repositorio de GitHub
+* 7999462 Creando un endpoint sencillo
+* 43da16b Creando el proyecto Spring Boot
+* b572268 Nuestro flujo de trabajo CI/CD (Visión general del tutorial)
+* 443597c Inicio 
+````
+
+### ▶️ Ejecución automática del workflow
+
+Después de hacer el push, GitHub detecta el commit y ejecuta el workflow. En la pestaña `Actions`, vemos que aparece un
+nuevo flujo con el mismo nombre del commit que acabamos de enviar: `Build Docker Image - Push Image to Docker Hub`.
+
+![19.png](assets/19.png)
+
+Si ingresamos a ese workflow, observamos que todos los pasos del job `build` se ejecutaron correctamente:
+
+- ✔️ Set up job
+- ✔️ Run actions/checkout@v4
+- ✔️ Set up JDK 21
+- ✔️ Build with Maven
+- ✔️ Update dependency graph
+- ✔️ Build Docker image
+- ✔️ Login to DockerHub
+- ✔️ Push Docker image
+- ✔️ Post Login to DockerHub
+- ✔️ Post Set up JDK 21
+- ✔️ Post Run actions/checkout@v4
+- ✔️ Complete job
+
+![20.png](assets/20.png)
+
+## 📦 Verificando la Imagen Subida a Docker Hub
+
+Finalmente, vamos a nuestro repositorio en `Docker Hub` para confirmar que las imágenes fueron publicadas correctamente.
+
+Todo ocurrió como esperábamos:
+
+- 🆕 `Docker Hub` creó automáticamente el repositorio: `magadiflo/github-cicd-actions` (Docker Hub crea el repo la
+  primera vez que empujamos una imagen con ese nombre).
+- 📤 `GitHub Actions` subió dos imágenes:
+    - `latest` (la versión actual más reciente)
+    - `b9c747a1` (el tag basado en el commit SHA)
+
+![21.png](assets/21.png)
+
+## Modificando código fuente para ver funcionamiento del workflow
+
+Vamos a realizar una prueba, así que modificamos el endpoint de nuestro controlador con el siguiente código:
+
+````java
+
+@RestController
+@RequestMapping(path = "/api/v1/greetings")
+public class HelloController {
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> hello() {
+        var response = new HashMap<String, Object>();
+        response.put("message", "Hola desde Spring Boot + GitHub Actions!");
+        response.put("status", "Ejecución exitosa");    //<---- Esto fue agregado
+        response.put("timestamp", LocalDateTime.now());
+        response.put("version", "1.0.0");
+        return ResponseEntity.ok(response);
+    }
+}
+````
+
+Procedemos a guardar en el repositorio local.
+
+````bash
+$ 
+````
+
+Subimos los cambios al repositorio remoto.
+
+````bash
+$ 
 ````

@@ -16,6 +16,7 @@ public class HelloController {
     public ResponseEntity<Map<String, Object>> hello() {
         var response = new HashMap<String, Object>();
         response.put("message", "Hola desde Spring Boot + GitHub Actions!");
+        response.put("status", "Ejecución exitosa");
         response.put("timestamp", LocalDateTime.now());
         response.put("version", "1.0.0");
         return ResponseEntity.ok(response);

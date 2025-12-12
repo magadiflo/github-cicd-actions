@@ -1,11 +1,11 @@
-# ETAPA 1: Copiamos el JAR ya compilado y extraemos las capas
+# ETAPA 1: Extraer capas del JAR (builder)
 FROM eclipse-temurin:21-jre-alpine AS builder
 WORKDIR /app
-# Aquí necesitamos copiar el JAR que se generó en la máquina de GitHub Actions
+# Copiamos el JAR que fue construido previamente por GitHub Actions
 COPY target/*.jar ./app.jar
 RUN java -Djarmode=layertools -jar app.jar extract
 
-# ETAPA 2: Ejecución (Imagen final ligera solo con JRE)
+# ETAPA 2: Imagen final ligera
 FROM eclipse-temurin:21-jre-alpine AS runner
 WORKDIR /app
 COPY --from=builder /app/dependencies ./
